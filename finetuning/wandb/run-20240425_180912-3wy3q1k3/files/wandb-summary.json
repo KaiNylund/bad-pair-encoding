@@ -1,1 +1,0 @@
-{"eval/loss": 22.17322540283203, "eval/bleu": 0.00697700993703203, "eval/chrf++": 1.588568418444302, "eval/runtime": 136.3787, "eval/samples_per_second": 178.378, "eval/steps_per_second": 11.153, "train/epoch": 0.01, "train/global_step": 10, "_timestamp": 1714093948.8902473, "_runtime": 196.0065622329712, "_step": 0}

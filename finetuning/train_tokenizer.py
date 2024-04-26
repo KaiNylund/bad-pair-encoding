@@ -33,6 +33,7 @@ if __name__ == "__main__":
     #train_dataset = [val for pair in zip(list(train_dataset[0]), list(train_dataset[1])) for val in pair]
 
     def get_training_corpus():
+        global train_dataset
         train_dataset = train_dataset["text"]
         for start_idx in range(0, len(train_dataset), args.batch_size):
             yield train_dataset[start_idx : start_idx + args.batch_size]

@@ -12,7 +12,7 @@
 # --constraint=["a40|a100"]
 
 CUR_PATH="/mmfs1/gscratch/ark/knylund/bad-pair-encoding"
-LANGUAGE="German"
+LANGUAGE="Russian"
 
 python -u ${CUR_PATH}/finetuning/finetune_paracrawl.py \
     --language $LANGUAGE \

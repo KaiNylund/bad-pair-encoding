@@ -17,7 +17,10 @@ from transformers import (
     Seq2SeqTrainer
 )
 
+import os
+
 if __name__ == "__main__":
+    os.environ["WANDB_DISABLED"] = "true"
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", required=True)
     parser.add_argument("--train_data_path", nargs="+", required=True)
@@ -96,7 +99,7 @@ if __name__ == "__main__":
         save_total_limit=3,
         num_train_epochs=args.train_epochs,
         predict_with_generate=True,
-        report_to=None
+        report_to="none"
     )
     data_collator = DataCollatorForSeq2Seq(
         tokenizer=tokenizer,
