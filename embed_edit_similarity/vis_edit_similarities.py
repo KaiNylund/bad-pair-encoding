@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 
 mpl.rcParams['figure.dpi'] = 300
 
-tok_edit_dist_sims = np.load("./embedding_edit_dist_sims.npy", allow_pickle=True).item()
+tok_edit_dist_sims = np.load("./mt5-small_embedding_edit_dist_sims.npy", allow_pickle=True).item()
 
 emb_sims = np.array(tok_edit_dist_sims["emb_sim"])
 leven_dists = np.array(tok_edit_dist_sims["leven_dist"])

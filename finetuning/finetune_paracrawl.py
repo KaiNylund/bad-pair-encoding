@@ -5,8 +5,6 @@ import argparse
 import numpy as np
 from datasets import Dataset
 from evaluate import load
-from huggingface_hub import notebook_login
-from nltk.translate.bleu_score import corpus_bleu
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import (
@@ -53,7 +51,7 @@ if __name__ == "__main__":
     def load_dataset(file_names):
         all_files_data = []
         for fname in file_names:
-            all_files_data.append(pd.read_csv(fname, sep="\t", header=None, on_bad_lines="skip"))
+            all_files_data.append(pd.read_csv(fname, sep="\t", header=None, on_bad_lines="skip", engine="python"))
         raw_data = pd.concat(all_files_data)
         hf_raw_data = Dataset.from_pandas(raw_data)
         return hf_raw_data.map(preprocess)
@@ -67,7 +65,6 @@ if __name__ == "__main__":
     chrf = load("chrf")
 
     all_metrics = []
-
     # Compute loss, BLEU, and chrf++ scores
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
@@ -96,7 +93,7 @@ if __name__ == "__main__":
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         weight_decay=0.01,
-        save_total_limit=3,
+        save_strategy="epoch",
         num_train_epochs=args.train_epochs,
         predict_with_generate=True,
         report_to="none"
@@ -118,4 +115,4 @@ if __name__ == "__main__":
     # Evaluate on full test dataset after training
     trainer.evaluate(eval_dataset=test_dataset)
     # Save all metrics computed during training
-    np.save(f"{args.out_dir}_dev_metrics", all_metrics)
+    np.save(f"{args.out_dir}_eval_metrics", all_metrics)

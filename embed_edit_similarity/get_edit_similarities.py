@@ -4,13 +4,11 @@ import numpy as np
 from tqdm import tqdm
 import Levenshtein
 
-
 def cos_sim(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-
-t5_tokenizer = AutoTokenizer.from_pretrained("google-t5/t5-small")
-t5_small = AutoModelForSeq2SeqLM.from_pretrained("google-t5/t5-small")
+t5_tokenizer = AutoTokenizer.from_pretrained("google/mt5-small")
+t5_small = AutoModelForSeq2SeqLM.from_pretrained("google/mt5-small")
 t5_vocab = t5_tokenizer.get_vocab()
 t5_emb_idx_to_token = {v: k for k, v in t5_vocab.items()}
 t5_small_embeddings = t5_small.state_dict()['shared.weight'].detach().numpy()
@@ -36,7 +34,7 @@ for i in tqdm(range(3, 3 + first_k_tokens)):
         tok1s.append(tok1)
         tok2s.append(tok2)
 
-np.save("embedding_edit_dist_sims", {
+np.save("mt5-small_embedding_edit_dist_sims", {
     "tok1": tok1s,
     "tok2": tok2s,
     "leven_dist": leven_dists,

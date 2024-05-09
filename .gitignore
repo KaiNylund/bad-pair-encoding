@@ -1,10 +1,9 @@
 **/paracrawl_data/*
 **/mt_models/*
-**/mt_tokenizers/*
 **/wandb/*
 **/slurm_logs/*
 
-**/embedding_edit_dist_sims.npy
+**/*embedding_edit_dist_sims.npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

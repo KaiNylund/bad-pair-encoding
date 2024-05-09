@@ -1,6 +1,0 @@
-Correlation between leven dist and jw dist: PearsonRResult(statistic=-0.008942059691500633, pvalue=2.492214960106803e-219)
-Correlation between leven dist and emb sim: PearsonRResult(statistic=-0.050001230539694186, pvalue=0.0)
-Correlation between jw dist and emb sim: PearsonRResult(statistic=-0.13219434328759364, pvalue=0.0)
-Linear fit for leven dist and jw dist: [-0.0010934] + 0.6171684684056596 with R^2=7.99604315266933e-05
-Linear fit for leven dist and emb sim: [-0.00139417] + 0.044089524345944785 with R^2=0.002500129391699857
-Linear fit for jw dist and emb sim: [-0.03014452] + 0.05430391000325284 with R^2=0.017475350638328946

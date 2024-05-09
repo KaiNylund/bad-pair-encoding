@@ -12,7 +12,7 @@
 # --constraint=["a40|a100"]
 
 CUR_PATH="/mmfs1/gscratch/ark/knylund/bad-pair-encoding"
-LANGUAGE="Russian"
+LANGUAGE="Finnish"
 
 python -u ${CUR_PATH}/finetuning/finetune_paracrawl.py \
     --language $LANGUAGE \
@@ -23,7 +23,7 @@ python -u ${CUR_PATH}/finetuning/finetune_paracrawl.py \
                       "${CUR_PATH}/paracrawl_data/${LANGUAGE}/train-5" \
     --dev_data_path "${CUR_PATH}/paracrawl_data/${LANGUAGE}/dev-small" \
     --test_data_path "${CUR_PATH}/paracrawl_data/${LANGUAGE}/evaluation" \
-    --model "google/mt5-small" \
-    --tokenizer "google/mt5-small" \
+    --model "google-t5/t5-small" \
+    --tokenizer "google-t5/t5-small" \
     --eval_steps 5000 \
-    --out_dir "${CUR_PATH}/mt_models/mt5-small_English-${LANGUAGE}_default_tokenizer"
+    --out_dir "${CUR_PATH}/mt_models/t5-small_English-${LANGUAGE}_default_tokenizer"

@@ -12,7 +12,7 @@
 
 
 CUR_PATH="/mmfs1/gscratch/ark/knylund/bad-pair-encoding"
-LANGUAGE="German"
+LANGUAGE="Finnish"
 
 python -u ${CUR_PATH}/finetuning/train_tokenizer.py \
     --train_data_path "${CUR_PATH}/paracrawl_data/${LANGUAGE}/train-1" \
