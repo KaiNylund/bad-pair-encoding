@@ -17,6 +17,25 @@ from transformers import (
 
 import os
 
+def retokenize(tokens, new_tokenizer, new_tokenizer_vocab):
+    re_tokenized = []
+    for i in range(len(tokens)):
+        if tokens[i] not in new_tokenizer_vocab:
+            #print(tokens[i])
+            new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
+            #print(def_de_tok, de_tokens[i])
+            if len(new_toks) > 0:
+                if tokens[i][0] != '▁' and new_toks[0] == '▁':
+                    new_toks = new_toks[1:]
+                elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
+                    del re_tokenized[-1]
+                re_tokenized += new_toks
+        else:
+            re_tokenized.append(tokens[i])
+    re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
+    return re_tokenized
+
+
 if __name__ == "__main__":
     os.environ["WANDB_DISABLED"] = "true"
     parser = argparse.ArgumentParser()
@@ -27,32 +46,49 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--model", default="google/mt5-small")
     parser.add_argument("--tokenizer", default="google/mt5-small")
-    parser.add_argument("--max_seq_len", type=int, default=512)
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--max_seq_len", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=8e-4)
     parser.add_argument("--train_epochs", type=int, default=1)
     parser.add_argument("--eval_steps", type=int, default=10000)
     args = parser.parse_args()
 
     # Load model + tokenizer
+    prefix = f"translate English to {args.language}: "
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model).to("cuda")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
-    # Preprocess + tokenize paracrawl splits
-    prefix = f"translate English to {args.language}: "
-    def preprocess(sample):
-        inputs = prefix + str(sample["0"])
-        targets = str(sample["1"])
-        model_inputs = tokenizer(inputs, max_length=args.max_seq_len, truncation=True)
-        labels = tokenizer(text_target=targets, max_length=args.max_seq_len, truncation=True)
-        model_inputs["labels"] = labels["input_ids"]
-        return model_inputs
+    if args.tokenizer != args.model:
+        model_tokenizer = AutoTokenizer.from_pretrained(args.model)
+        model_tokenizer_vocab = set(model_tokenizer.get_vocab().keys())
+        def preprocess(sample):
+            inputs = prefix + str(sample["0"])
+            targets = str(sample["1"])
+            model_inputs = {}
+            model_inputs["input_ids"] = tokenizer.tokenize(inputs, max_length=args.max_seq_len, truncation=True)
+            model_inputs["input_ids"] = retokenize(model_inputs["input_ids"], model_tokenizer, model_tokenizer_vocab)
+            labels = tokenizer.tokenize(targets, max_length=args.max_seq_len, truncation=True)
+            labels = retokenize(labels, model_tokenizer, model_tokenizer_vocab)
+            model_inputs["labels"] = labels
+            model_inputs["attention_mask"] = ([1] * len(model_inputs["input_ids"]))
+            #print(model_inputs)
+            return model_inputs
+    else:
+        # Preprocess + tokenize paracrawl splits
+        def preprocess(sample):
+            inputs = prefix + str(sample["0"])
+            targets = str(sample["1"])
+            model_inputs = tokenizer(inputs, max_length=args.max_seq_len, truncation=True)
+            labels = tokenizer(text_target=targets, max_length=args.max_seq_len, truncation=True)
+            model_inputs["labels"] = labels["input_ids"]
+            return model_inputs
 
     def load_dataset(file_names):
         all_files_data = []
         for fname in file_names:
             all_files_data.append(pd.read_csv(fname, sep="\t", header=None, on_bad_lines="skip", engine="python"))
         raw_data = pd.concat(all_files_data)
+        raw_data = raw_data.dropna()
         hf_raw_data = Dataset.from_pandas(raw_data)
         return hf_raw_data.map(preprocess)
 
@@ -96,6 +132,7 @@ if __name__ == "__main__":
         save_strategy="epoch",
         num_train_epochs=args.train_epochs,
         predict_with_generate=True,
+        fp16=True,
         report_to="none"
     )
     data_collator = DataCollatorForSeq2Seq(
