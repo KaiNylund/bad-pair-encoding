@@ -2,6 +2,7 @@
 **/mt_models/*
 **/wandb/*
 **/slurm_logs/*
+**/MorphyNet/*
 
 **/*embedding_edit_dist_sims.npy
 

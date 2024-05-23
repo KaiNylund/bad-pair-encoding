@@ -4,15 +4,15 @@
 #SBATCH --partition=gpu-l40
 #SBATCH --nodes=1
 #SBATCH --time=24:00:00
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --gpus-per-node=1
 #SBATCH --output=/mmfs1/gscratch/ark/knylund/bad-pair-encoding/slurm_logs/%j.out
 # --constraint=["a40|a100"]
 
 CUR_PATH="/mmfs1/gscratch/ark/knylund/bad-pair-encoding"
-LANGUAGE="Russian"
+LANGUAGE="Finnish"
 
 python -u ${CUR_PATH}/finetuning/finetune_paracrawl.py \
     --language $LANGUAGE \
@@ -26,4 +26,6 @@ python -u ${CUR_PATH}/finetuning/finetune_paracrawl.py \
     --model "google/mt5-small" \
     --tokenizer "${CUR_PATH}/mt_tokenizers/mt5-small_English-${LANGUAGE}_tokenizer" \
     --eval_steps 5000 \
+    --batch_size 16 \
+    --gradient_accumulation_steps 2 \
     --out_dir "${CUR_PATH}/mt_models/mt5-small_English-${LANGUAGE}_${LANGUAGE}_tokenizer"
