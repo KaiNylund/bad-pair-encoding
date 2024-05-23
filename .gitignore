@@ -2,8 +2,7 @@
 **/mt_models/*
 **/wandb/*
 **/slurm_logs/*
-pretrain/mc4_en.hf
-pretrain/mc4_fi.hf
+pretrain/data
 
 **/*embedding_edit_dist_sims.npy
 
