@@ -3,6 +3,7 @@
 **/wandb/*
 **/slurm_logs/*
 pretrain/data
+**/MorphyNet/*
 
 **/*embedding_edit_dist_sims.npy
 
