@@ -28,9 +28,9 @@ from datasets import load_dataset
 
 
 CUR_PATH="/mmfs1/gscratch/ark/knylund/bad-pair-encoding"
-language = 'Finnish'
+language = 'German'
 source_lang = "eng"
-target_lang = "fin"
+target_lang = "deu"
 # Change this to the languages we want to train on
 data_files = [f"{CUR_PATH}/paracrawl_data/{language}/train-1",
               f"{CUR_PATH}/paracrawl_data/{language}/train-2",
@@ -123,7 +123,8 @@ for lang in [source_lang, target_lang]:
 
       # Make sure there's only one head in there and that it's first or last for now
       if len(indices_with_stems) != 1:
-        raise Exception(f"Inflected word {inflected_word} with morpheme_features {morpheme_features} doesn't have exactly one head")
+        print(f"Inflected word {inflected_word} with morpheme_features {morpheme_features} doesn't have exactly one head")
+        continue
       stem_index = indices_with_stems[0]
 
       # For now let's make sure that the target_word is not in the dictionary
@@ -323,7 +324,7 @@ new_tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
 )
 
 # This line was copy and pasted, I'm not sure exactly how it works
-new_tokenizer.train([data_file], trainer=trainers.BpeTrainer(vocab_size=len(old_tokenizer), special_tokens=["<|endoftext|>"]) )
+new_tokenizer.train(data_files, trainer=trainers.BpeTrainer(vocab_size=len(old_tokenizer), special_tokens=["<|endoftext|>"]) )
 new_tokenizer.decoder = decoders.ByteLevel()
 new_tokenizer.post_processor = processors.ByteLevel(trim_offsets=False)
 

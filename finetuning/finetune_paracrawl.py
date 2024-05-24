@@ -17,48 +17,6 @@ from transformers import (
 
 import os
 
-# for "split" strategy
-def retokenize(tokens, new_tokenizer, new_tokenizer_vocab):
-    re_tokenized = []
-    for i in range(len(tokens)):
-        if tokens[i] not in new_tokenizer_vocab:
-            #print(tokens[i])
-            new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
-            #print(def_de_tok, de_tokens[i])
-            if len(new_toks) > 0:
-                if tokens[i][0] != '▁' and new_toks[0] == '▁':
-                    new_toks = new_toks[1:]
-                elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
-                    del re_tokenized[-1]
-                re_tokenized += new_toks
-        else:
-            re_tokenized.append(tokens[i])
-    re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
-    return re_tokenized
-
-# for "average" strategy
-def retokenize_embs_mean_unks(tokens, new_tokenizer, new_token_to_emb):
-    re_tokenized_embs = []
-    re_tokenized = []
-    for i in range(len(tokens)):
-        if tokens[i] not in new_token_to_emb:
-            #print(tokens[i])
-            new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
-            #print(def_de_tok, de_tokens[i])
-            if len(new_toks) > 0:
-                if tokens[i][0] != '▁' and new_toks[0] == '▁':
-                    new_toks = new_toks[1:]
-                elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
-                    del re_tokenized[-1]
-                re_tokenized += new_toks
-                re_tokenized_embs.append(torch.mean([new_token_to_emb[tok] for tok in new_toks], dim=0))
-        else:
-            re_tokenized.append(tokens[i])
-            re_tokenized_embs.append(new_token_to_emb[tokens[i]])
-    re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
-    re_tokenized_embs = (re_tokenized_embs + [new_token_to_emb["</s>"]])
-    return re_tokenized_embs
-
 
 
 if __name__ == "__main__":
@@ -79,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_epochs", type=int, default=1)
     parser.add_argument("--eval_steps", type=int, default=10000)
     parser.add_argument("--overwrite_cache", action="store_true", default=True)
+    parser.add_argument("--using_morpheme_tokenizer", action="store_true", default=False)
     parser.add_argument("--ignore_pad_token_for_loss", type=bool, default=True, help="Whether to ignore the tokens corresponding to padded labels in the loss computation or not.")
     args = parser.parse_args()
 
@@ -91,22 +50,82 @@ if __name__ == "__main__":
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model).to("cuda")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
 
+
+    total_default_tokens = 0
+    total_num_tokens = 0
+    total_num_examples = 0
+
+    # for "split" strategy
+    def retokenize(tokens, new_tokenizer, new_tokenizer_vocab):
+        re_tokenized = []
+        for i in range(len(tokens)):
+            if tokens[i] not in new_tokenizer_vocab:
+                #print(tokens[i])
+                new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
+                if args.using_morpheme_tokenizer:
+                    new_toks = [mtok.replace("Ġ", '▁').replace("Ã¤", "ä").replace("âĢľ", "“") for mtok in new_toks]
+                #print(def_de_tok, de_tokens[i])
+                if len(new_toks) > 0:
+                    if tokens[i][0] != '▁' and new_toks[0] == '▁':
+                        new_toks = new_toks[1:]
+                    elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
+                        del re_tokenized[-1]
+                    re_tokenized += new_toks
+            else:
+                re_tokenized.append(tokens[i])
+        re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
+        return re_tokenized
+
+    # for "average" strategy
+    def retokenize_embs_mean_unks(tokens, new_tokenizer, new_token_to_emb):
+        re_tokenized_embs = []
+        re_tokenized = []
+        for i in range(len(tokens)):
+            if tokens[i] not in new_token_to_emb:
+                #print(tokens[i])
+                new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
+                if args.using_morpheme_tokenizer:
+                    new_toks = [mtok.replace("Ġ", '▁').replace("Ã¤", "ä").replace("âĢľ", "“") for mtok in new_toks]
+                #print(def_de_tok, de_tokens[i])
+                if len(new_toks) > 0:
+                    if tokens[i][0] != '▁' and new_toks[0] == '▁':
+                        new_toks = new_toks[1:]
+                    elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
+                        del re_tokenized[-1]
+                    re_tokenized += new_toks
+                    re_tokenized_embs.append(torch.mean([new_token_to_emb[tok] for tok in new_toks], dim=0))
+            else:
+                re_tokenized.append(tokens[i])
+                re_tokenized_embs.append(new_token_to_emb[tokens[i]])
+        re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
+        re_tokenized_embs = (re_tokenized_embs + [new_token_to_emb["</s>"]])
+        return re_tokenized_embs
+
+
     if args.tokenizer != args.model:
         model_tokenizer = AutoTokenizer.from_pretrained(args.model)
         model_tokenizer_vocab = set(model_tokenizer.get_vocab().keys())
         # retokenize unknowns with the default tokenizer
         if args.unk_strategy == "split":
             def preprocess(sample):
+                global total_default_tokens
+                global total_num_tokens
+                global total_num_examples
                 inputs = prefix + str(sample["0"])
                 targets = str(sample["1"])
                 model_inputs = {}
                 model_inputs["input_ids"] = tokenizer.tokenize(inputs, max_length=args.max_seq_len, truncation=True)
+                total_default_tokens += len(model_inputs["input_ids"])
                 model_inputs["input_ids"] = retokenize(model_inputs["input_ids"], model_tokenizer, model_tokenizer_vocab)
                 labels = tokenizer.tokenize(targets, max_length=args.max_seq_len, truncation=True)
+                total_default_tokens += len(labels)
                 labels = retokenize(labels, model_tokenizer, model_tokenizer_vocab)
                 model_inputs["attention_mask"] = ([1] * len(model_inputs["input_ids"]))
                 model_inputs["labels"] = labels
                 #print(model_inputs)
+                total_num_tokens += len(model_inputs["input_ids"])
+                total_num_tokens += len(model_inputs["labels"])
+                total_num_examples += 1
                 return model_inputs
         # handle unknowns in the input by averaging the embeddings from the retokenized version
         else:
@@ -133,11 +152,17 @@ if __name__ == "__main__":
     else:
         # Preprocess + tokenize paracrawl splits
         def preprocess(sample):
+            global total_default_tokens
+            global total_num_tokens
+            global total_num_examples
             inputs = prefix + str(sample["0"])
             targets = str(sample["1"])
             model_inputs = tokenizer(inputs, max_length=args.max_seq_len, truncation=True)
             labels = tokenizer(text_target=targets, max_length=args.max_seq_len, truncation=True)
             model_inputs["labels"] = labels["input_ids"]
+            total_num_tokens += len(model_inputs["input_ids"])
+            total_num_tokens += len(model_inputs["labels"])
+            total_num_examples += 1
             return model_inputs
 
     def load_dataset(file_names):
@@ -176,6 +201,12 @@ if __name__ == "__main__":
         }
         all_metrics.append(metrics)
         return metrics
+
+
+    print(f"Num with default tokenizer = {total_default_tokens}")
+    print(f"Num with new tokenizer = {total_num_tokens}")
+    print(f"Num examples = {total_num_examples}")
+
 
     # training
     # Evaluate on dev dataset every n steps during training
