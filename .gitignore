@@ -2,6 +2,7 @@
 **/mt_models/*
 **/wandb/*
 **/slurm_logs/*
+pretrain/data
 **/MorphyNet/*
 **/MorphyNet
 
