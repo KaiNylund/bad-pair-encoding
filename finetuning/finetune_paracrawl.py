@@ -17,6 +17,30 @@ from transformers import (
 
 import os
 
+# for untested "average" strategy
+#def retokenize_embs_mean_unks(tokens, new_tokenizer, new_token_to_emb):
+#    re_tokenized_embs = []
+#    re_tokenized = []
+#    for i in range(len(tokens)):
+#        if tokens[i] not in new_token_to_emb:
+#            #print(tokens[i])
+#            new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
+#            if args.using_morpheme_tokenizer:
+#                new_toks = [mtok.replace("Ġ", '▁').replace("Ã¤", "ä").replace("âĢľ", "“") for mtok in new_toks]
+#            #print(def_de_tok, de_tokens[i])
+#            if len(new_toks) > 0:
+#                if tokens[i][0] != '▁' and new_toks[0] == '▁':
+#                    new_toks = new_toks[1:]
+#                elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
+#                    del re_tokenized[-1]
+#                re_tokenized += new_toks
+#                re_tokenized_embs.append(torch.mean([new_token_to_emb[tok] for tok in new_toks], dim=0))
+#        else:
+#            re_tokenized.append(tokens[i])
+#            re_tokenized_embs.append(new_token_to_emb[tokens[i]])
+#    re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
+#    re_tokenized_embs = (re_tokenized_embs + [new_token_to_emb["</s>"]])
+#    return re_tokenized_embs
 
 
 if __name__ == "__main__":
@@ -33,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
     parser.add_argument("--unk_strategy", type=str, default="split")
+    parser.add_argument("--added_tokens", type=int, default=None, help="top-k tokens added from the new tokenizer to the default before finetuning")
     parser.add_argument("--lr", type=float, default=8e-4)
     parser.add_argument("--train_epochs", type=int, default=1)
     parser.add_argument("--eval_steps", type=int, default=10000)
@@ -49,7 +74,6 @@ if __name__ == "__main__":
     prefix = f"translate English to {args.language}: "
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model).to("cuda")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
-
 
     total_default_tokens = 0
     total_num_tokens = 0
@@ -75,80 +99,55 @@ if __name__ == "__main__":
                 re_tokenized.append(tokens[i])
         re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
         return re_tokenized
+    
 
-    # for "average" strategy
-    def retokenize_embs_mean_unks(tokens, new_tokenizer, new_token_to_emb):
-        re_tokenized_embs = []
-        re_tokenized = []
-        for i in range(len(tokens)):
-            if tokens[i] not in new_token_to_emb:
-                #print(tokens[i])
-                new_toks = new_tokenizer.tokenize(tokens[i], add_special_tokens=False)
-                if args.using_morpheme_tokenizer:
-                    new_toks = [mtok.replace("Ġ", '▁').replace("Ã¤", "ä").replace("âĢľ", "“") for mtok in new_toks]
-                #print(def_de_tok, de_tokens[i])
-                if len(new_toks) > 0:
-                    if tokens[i][0] != '▁' and new_toks[0] == '▁':
-                        new_toks = new_toks[1:]
-                    elif new_toks[0][0] == '▁' and len(re_tokenized) > 0 and re_tokenized[-1] == '▁':
-                        del re_tokenized[-1]
-                    re_tokenized += new_toks
-                    re_tokenized_embs.append(torch.mean([new_token_to_emb[tok] for tok in new_toks], dim=0))
-            else:
-                re_tokenized.append(tokens[i])
-                re_tokenized_embs.append(new_token_to_emb[tokens[i]])
-        re_tokenized = (new_tokenizer.convert_tokens_to_ids(re_tokenized) + [1])
-        re_tokenized_embs = (re_tokenized_embs + [new_token_to_emb["</s>"]])
-        return re_tokenized_embs
-
-
+    # If our model and given tokenizers are different:
     if args.tokenizer != args.model:
         model_tokenizer = AutoTokenizer.from_pretrained(args.model)
         model_tokenizer_vocab = set(model_tokenizer.get_vocab().keys())
-        # retokenize unknowns with the default tokenizer
-        if args.unk_strategy == "split":
-            def preprocess(sample):
-                global total_default_tokens
-                global total_num_tokens
-                global total_num_examples
-                inputs = prefix + str(sample["0"])
-                targets = str(sample["1"])
-                model_inputs = {}
-                model_inputs["input_ids"] = tokenizer.tokenize(inputs, max_length=args.max_seq_len, truncation=True)
-                total_default_tokens += len(model_inputs["input_ids"])
-                model_inputs["input_ids"] = retokenize(model_inputs["input_ids"], model_tokenizer, model_tokenizer_vocab)
-                labels = tokenizer.tokenize(targets, max_length=args.max_seq_len, truncation=True)
-                total_default_tokens += len(labels)
-                labels = retokenize(labels, model_tokenizer, model_tokenizer_vocab)
-                model_inputs["attention_mask"] = ([1] * len(model_inputs["input_ids"]))
-                model_inputs["labels"] = labels
-                #print(model_inputs)
-                total_num_tokens += len(model_inputs["input_ids"])
-                total_num_tokens += len(model_inputs["labels"])
-                total_num_examples += 1
-                return model_inputs
-        # handle unknowns in the input by averaging the embeddings from the retokenized version
-        else:
-            model_token_to_emb_idx = model_tokenizer.get_vocab()
-            #model_emb_idx_to_token = {v: k for k, v in model_token_to_emb_idx}
-            # Assuming we're using mt5 or t5
-            model_embeddings = model.state_dict()['shared.weight'].detach().numpy()
-            token_to_emb = {}
-            for tok, emb_idx in model_token_to_emb_idx.items():
-                token_to_emb[tok] = model_embeddings[emb_idx]
+        # Add top-k tokens from the new tokenizer to the default tokenizer before finetuning
+        if args.added_tokens != None:
+            new_tokens = []
+            def_emb_idx_to_tok = {v: k for k, v in model_tokenizer.get_vocab().items()}
+            new_emb_idx_to_tok = {v: k for k, v in tokenizer.get_vocab().items()}
+            cur_tok_idx = 0
+            while len(new_tokens) < args.added_tokens:
+                new_tok = new_emb_idx_to_tok[cur_tok_idx]
+                if args.using_morpheme_tokenizer:
+                    new_tok = new_tok.replace("Ġ", '▁').replace("Ã¤", "ä").replace("âĢľ", "“")
+                if new_tok not in model_tokenizer_vocab:
+                    new_tokens.append(new_tok)
+                cur_tok_idx += 1
+                if cur_tok_idx > len(tokenizer):
+                    break
+            print("Adding the following tokens: " + str(new_tokens))
+            # update model tokenizer
+            tokenizer.add_tokens(list(new_tokens))
+            # add new, random embeddings for the new tokens
+            model.resize_token_embeddings(len(tokenizer))
 
-            def preprocess(sample):
-                inputs = prefix + str(sample["0"])
-                targets = str(sample["1"])
-                model_inputs = {}
-                input_tokens = tokenizer.tokenize(inputs, max_length=args.max_seq_len, truncation=True)
-                model_inputs["input_embeds"] = retokenize_embs_mean_unks(input_tokens, model_tokenizer, model_token_to_emb_idx)
-                labels = tokenizer.tokenize(targets, max_length=args.max_seq_len, truncation=True)
-                labels = retokenize(labels, model_tokenizer, model_tokenizer_vocab)
-                model_inputs["attention_mask"] = ([1] * len(model_inputs["input_embeds"]))
-                model_inputs["labels"] = labels
-                #print(model_inputs)
-                return model_inputs
+        # retokenize unknowns with the default tokenizer
+        #if args.unk_strategy == "split":
+        def preprocess(sample):
+            global total_default_tokens
+            global total_num_tokens
+            global total_num_examples
+            inputs = prefix + str(sample["0"])
+            targets = str(sample["1"])
+            model_inputs = {}
+            model_inputs["input_ids"] = tokenizer.tokenize(inputs, max_length=args.max_seq_len, truncation=True)
+            total_default_tokens += len(model_inputs["input_ids"])
+            model_inputs["input_ids"] = retokenize(model_inputs["input_ids"], model_tokenizer, model_tokenizer_vocab)
+            labels = tokenizer.tokenize(targets, max_length=args.max_seq_len, truncation=True)
+            total_default_tokens += len(labels)
+            labels = retokenize(labels, model_tokenizer, model_tokenizer_vocab)
+            model_inputs["attention_mask"] = ([1] * len(model_inputs["input_ids"]))
+            model_inputs["labels"] = labels
+            #print(model_inputs)
+            total_num_tokens += len(model_inputs["input_ids"])
+            total_num_tokens += len(model_inputs["labels"])
+            total_num_examples += 1
+            return model_inputs
     else:
         # Preprocess + tokenize paracrawl splits
         def preprocess(sample):
@@ -173,7 +172,6 @@ if __name__ == "__main__":
         raw_data = raw_data.dropna()
         hf_raw_data = Dataset.from_pandas(raw_data)
         return hf_raw_data.map(preprocess,
-                                batched=True,
                                 load_from_cache_file=(not args.overwrite_cache),
                                 desc="Preprocessing train dataset")
 
@@ -193,15 +191,21 @@ if __name__ == "__main__":
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        bleu_score = bleu.compute(predictions=decoded_preds, references=decoded_labels)
-        chrf_score = chrf.compute(predictions=decoded_preds, references=decoded_labels)
+        try:
+            bleu_score = bleu.compute(predictions=decoded_preds, references=decoded_labels)["bleu"] * 100
+            chrf_score = chrf.compute(predictions=decoded_preds, references=decoded_labels)["score"]
+        except Exception as e:
+            print("Cache error")
+            bleu_score = np.nan
+            chrf_score = np.nan
+            bleu = load("bleu")
+            chrf = load("chrf")
         metrics = {
-            "bleu": bleu_score["bleu"] * 100,
-            "chrf++": chrf_score["score"]
+            "bleu": bleu_score,
+            "chrf++": chrf_score
         }
         all_metrics.append(metrics)
         return metrics
-
 
     print(f"Num with default tokenizer = {total_default_tokens}")
     print(f"Num with new tokenizer = {total_num_tokens}")

@@ -324,11 +324,11 @@ new_tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
 )
 
 # This line was copy and pasted, I'm not sure exactly how it works
-new_tokenizer.train(data_files, trainer=trainers.BpeTrainer(vocab_size=len(old_tokenizer), special_tokens=["<|endoftext|>"]) )
+new_tokenizer.train(data_files, trainer=trainers.BpeTrainer(vocab_size=52000, special_tokens=["<|endoftext|>"]) )
 new_tokenizer.decoder = decoders.ByteLevel()
 new_tokenizer.post_processor = processors.ByteLevel(trim_offsets=False)
 
 # Wrap it
 # from transformers import GPT2TokenizerFast
 wrapped_tokenizer = T5TokenizerFast(tokenizer_object=new_tokenizer)
-wrapped_tokenizer.save_pretrained(f"gpt2-English-{language}_morpheme_tokenizer")
+wrapped_tokenizer.save_pretrained(f"gpt2-English-{language}_morpheme_tokenizer_52000")
