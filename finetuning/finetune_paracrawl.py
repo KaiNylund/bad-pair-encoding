@@ -47,9 +47,9 @@ if __name__ == "__main__":
     os.environ["WANDB_DISABLED"] = "true"
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", required=True)
-    parser.add_argument("--train_data_path", nargs="+", required=True)
-    parser.add_argument("--dev_data_path", nargs="+", required=True)
-    parser.add_argument("--test_data_path", nargs="+", required=True)
+    parser.add_argument("--train_data_path", nargs="+", default=None)
+    parser.add_argument("--dev_data_path", nargs="+", default=None)
+    parser.add_argument("--test_data_path", nargs="+", default=None)
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--model", default="google/mt5-small")
     parser.add_argument("--tokenizer", default="google/mt5-small")
@@ -61,8 +61,9 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=8e-4)
     parser.add_argument("--train_epochs", type=int, default=1)
     parser.add_argument("--eval_steps", type=int, default=10000)
-    parser.add_argument("--overwrite_cache", action="store_true", default=True)
+    parser.add_argument("--overwrite_cache", action="store_true", default=False)
     parser.add_argument("--using_morpheme_tokenizer", action="store_true", default=False)
+    parser.add_argument("--using_checkpoint", action="store_true", default=False)
     parser.add_argument("--ignore_pad_token_for_loss", type=bool, default=True, help="Whether to ignore the tokens corresponding to padded labels in the loss computation or not.")
     args = parser.parse_args()
 
@@ -103,7 +104,10 @@ if __name__ == "__main__":
 
     # If our model and given tokenizers are different:
     if args.tokenizer != args.model:
-        model_tokenizer = AutoTokenizer.from_pretrained(args.model)
+        if args.using_checkpoint:
+            model_tokenizer = AutoTokenizer.from_pretrained("google/mt5-small")
+        else:
+            model_tokenizer = AutoTokenizer.from_pretrained(args.model)
         model_tokenizer_vocab = set(model_tokenizer.get_vocab().keys())
         # Add top-k tokens from the new tokenizer to the default tokenizer before finetuning
         if args.added_tokens != None:
@@ -175,9 +179,16 @@ if __name__ == "__main__":
                                 load_from_cache_file=(not args.overwrite_cache),
                                 desc="Preprocessing train dataset")
 
-    train_dataset = load_dataset(args.train_data_path).remove_columns(["0", "1"])
-    dev_dataset = load_dataset(args.dev_data_path).remove_columns(["0", "1"])
-    test_dataset = load_dataset(args.test_data_path).remove_columns(["0", "1"])
+    if args.train_data_path != None:
+        train_dataset = load_dataset(args.train_data_path).remove_columns(["0", "1"])
+    else:
+        train_dataset = None
+    if args.dev_data_path != None:
+        dev_dataset = load_dataset(args.dev_data_path).remove_columns(["0", "1"])
+    else:
+        dev_dataset = None
+    if args.test_data_path != None:
+        test_dataset = load_dataset(args.test_data_path).remove_columns(["0", "1"])
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id, reduction='none')
     bleu = load("bleu")
@@ -186,6 +197,8 @@ if __name__ == "__main__":
     all_metrics = []
     # Compute loss, BLEU, and chrf++ scores
     def compute_metrics(eval_preds):
+        global bleu
+        global chrf
         preds, labels = eval_preds
         # Replace -100 in the labels as we can't decode them.
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
@@ -243,8 +256,11 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         compute_metrics=compute_metrics
     )
-    trainer.train()
-    # Evaluate on full test dataset after training
-    trainer.evaluate(eval_dataset=test_dataset)
+    if args.train_data_path:
+        trainer.train()
+    if args.test_data_path:
+        # Evaluate on full test dataset after training
+        trainer.evaluate(eval_dataset=test_dataset)
+    print(all_metrics)
     # Save all metrics computed during training
     np.save(f"{args.out_dir}_eval_metrics", all_metrics)
